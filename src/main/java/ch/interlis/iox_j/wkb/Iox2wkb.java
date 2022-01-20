@@ -22,18 +22,17 @@
  */
 package ch.interlis.iox_j.wkb;
 
-import java.io.IOException;
-import java.util.Iterator;
-
-import com.vividsolutions.jts.geom.Coordinate;
-
-import ch.ehi.basics.logging.EhiLogger;
 import ch.interlis.iom.IomConstants;
 import ch.interlis.iom.IomObject;
-import ch.interlis.iom_j.itf.impl.hrg.HrgUtility;
 import ch.interlis.iom_j.itf.impl.jtsext.geom.ArcSegment;
-import ch.interlis.iom_j.itf.impl.jtsext.geom.CurveSegment;
 import ch.interlis.iox_j.jts.Iox2jtsException;
+import com.vividsolutions.jts.geom.Coordinate;
+import com.vividsolutions.jts.geom.CoordinateList;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /** Utility to convert from INTERLIS to WKB geometry.
  * @author ceis
@@ -79,9 +78,8 @@ import ch.interlis.iox_j.jts.Iox2jtsException;
 public class Iox2wkb {
     private int outputDimension = 2;
     private ByteArrayOutputStream os = null;
-    private boolean asEWKB = true; 
-	// utility, no instances
-	private Iox2wkb(){}
+    private boolean asEWKB = true;
+
     public Iox2wkb(int outputDimension) {
         this(outputDimension, java.nio.ByteOrder.BIG_ENDIAN, true);
     }
@@ -92,7 +90,7 @@ public class Iox2wkb {
         this.outputDimension = outputDimension;
         this.asEWKB=asEWKB;
         os = new ByteArrayOutputStream(byteOrder);
-        
+
         if (outputDimension < 2 || outputDimension > 3)
           throw new IllegalArgumentException("Output dimension must be 2 or 3");
     }
@@ -379,10 +377,81 @@ public class Iox2wkb {
 	public byte[] polyline2wkb(IomObject polylineObjs[],boolean isSurfaceOrArea,boolean asCompoundCurve,double p)
 	throws Iox2wkbException
 	{
-		if(polylineObjs==null){
-			return null;
+		os.reset();
+		byte[][] lines = polyline2wkb(polylineObjs, isSurfaceOrArea, asCompoundCurve, p, false);
+		for (byte[]line : lines) {
+			try {
+				os.write(line);
+			} catch (IOException e) {
+				throw new RuntimeException("Unexpected IO exception: " + e.getMessage());
+			}
 		}
-		byte ret[]=null;
+
+		return os.toByteArray();
+	}
+
+
+	private byte[][] polyline2wkb(IomObject polylineObjs[], boolean isSurfaceOrArea, boolean asCompoundCurve, double p, boolean repairTouchingLine)
+			throws Iox2wkbException {
+		if (polylineObjs == null) {
+			return new byte[0][0];
+		}
+
+		List<PolylineCoordList> lines = new ArrayList<PolylineCoordList>();
+
+		for (IomObject polylineObj : polylineObjs) {
+			if (polylineObj == null) {
+				continue;
+			}
+			// is POLYLINE?
+			if (isSurfaceOrArea && polylineObj.getattrobj("lineattr", 0) != null) {
+				throw new Iox2wkbException("Lineattributes not supported");
+			}
+			if (polylineObj.getobjectconsistency() == IomConstants.IOM_INCOMPLETE) {
+				throw new Iox2wkbException("clipped polyline not supported");
+			}
+
+			for(int sequencei=0; sequencei<polylineObj.getattrvaluecount("sequence"); sequencei++) {
+				IomObject sequence=polylineObj.getattrobj("sequence",sequencei);
+				int segmentc=sequence.getattrvaluecount("segment");
+
+				PolylineCoordList currentLine = null;
+				Coordinate startCoord = null;
+
+				for(int segmenti=0; segmenti<segmentc; segmenti++){
+					IomObject segment = sequence.getattrobj("segment", segmenti);
+					Coordinate segmentCoordinate = coord2JTS(segment);
+
+					if (startCoord == null){
+						startCoord = segmentCoordinate;
+					} else if (currentLine == null) {
+						int wkbType =  (segment.getobjecttag().equals("ARC") && asCompoundCurve)
+								? WKBConstants.wkbCompoundCurve
+								: WKBConstants.wkbLineString;
+						currentLine = new PolylineCoordList(wkbType);
+						lines.add(currentLine);
+						currentLine.coordinates.add(startCoord);
+						currentLine.coordinates.add(segmentCoordinate);
+					}
+					else if (startCoord.equals2D(segmentCoordinate) && currentLine != null){
+						currentLine.coordinates.add(segmentCoordinate);
+						startCoord = segmentCoordinate;
+						currentLine = null;
+					}else if(segment.getobjecttag().equals("COORD")) {
+						if (currentLine.wkbType == WKBConstants.wkbLineString)
+
+					} else if (segment.getobjecttag().equals("ARC"))
+					{
+
+					}
+				}
+			}
+
+
+		}
+
+
+		byte[] wkb = null;
         try {
 			os.reset();
 			writeByteOrder();
@@ -397,7 +466,7 @@ public class Iox2wkb {
 			int size=0;
 			// write dummy size
 			os.writeInt(0);
-			
+
 			java.util.ArrayList<Integer> patches=new java.util.ArrayList<Integer>();
 			
             int coordc=0;
@@ -405,21 +474,7 @@ public class Iox2wkb {
             int currentComponent=0;
             IomObject arcStartPt=null;
 			for(IomObject polylineObj:polylineObjs) {
-		        if(polylineObj==null){
-		            continue;
-		        }
-	            // is POLYLINE?
-	            if(isSurfaceOrArea){
-	                IomObject lineattr=polylineObj.getattrobj("lineattr",0);
-	                if(lineattr!=null){
-	                    //writeAttrs(out,lineattr);
-	                    throw new Iox2wkbException("Lineattributes not supported");                         
-	                }
-	            }
-	            boolean clipped=polylineObj.getobjectconsistency()==IomConstants.IOM_INCOMPLETE;
-	            if(clipped){
-	                throw new Iox2wkbException("clipped polyline not supported");
-	            }
+
 	            for(int sequencei=0;sequencei<polylineObj.getattrvaluecount("sequence");sequencei++){
 	                if(clipped){
 	                    //out.startElement(tags::get_CLIPPED(),0,0);
@@ -545,20 +600,22 @@ public class Iox2wkb {
 	                }
 	            }
 			}
-			ret=os.toByteArray();
+
+			wkb = os.toByteArray();
+
 			// fix size of components
 			Iterator<Integer> patchi=patches.iterator();
 			while(patchi.hasNext()){
 				int patchPos=patchi.next();
 				int value=patchi.next();
-				patchInt(ret,patchPos,value);
+				patchInt(wkb,patchPos,value);
 			}
 			// fix number of components (or size if simple linestring)
-			patchInt(ret,sizePos,size);
+			patchInt(wkb,sizePos,size);
 		} catch (IOException e) {
 	        throw new RuntimeException("Unexpected IO exception: " + e.getMessage());
 		}
-		return ret;
+		return new CorrectedPolylineWkbResult(wkb,0);
 	}
 	void patchInt(byte ret[],int patchPos,int patchValue)
 	{
@@ -628,7 +685,13 @@ public class Iox2wkb {
 	 * @return JTS Polygon
 	 * @throws Iox2wkbException
 	 */
-	public byte[] surface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP) //SurfaceOrAreaType type)
+	public byte[] surface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP)
+	throws Iox2wkbException
+	{
+		return surface2wkb(obj, asCurvePolygon, strokeP, true);
+	}
+
+	public byte[] surface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP, boolean repairTouchingLine) //SurfaceOrAreaType type)
 	throws Iox2wkbException
 	{
 		if(obj==null){
@@ -659,7 +722,8 @@ public class Iox2wkb {
 				IomObject surface=obj.getattrobj("surface",surfacei);
 
 				int boundaryc=surface.getattrvaluecount("boundary");
-				
+
+				int boundaryCountPosition = os.size();
 			    os.writeInt(boundaryc);
 			    
 				for(int boundaryi=0;boundaryi<boundaryc;boundaryi++){
@@ -667,17 +731,13 @@ public class Iox2wkb {
 					int polylinec = boundary.getattrvaluecount("polyline");
                     if(asCurvePolygon){
                         Iox2wkb helper=new Iox2wkb(outputDimension,os.order(),asEWKB);
-						if(polylinec==1) {
-                            IomObject polyline=boundary.getattrobj("polyline",0);
-                            os.write(helper.polyline2wkb(polyline,true,asCurvePolygon,strokeP));
-						}else {
-						    IomObject polylines[]=new IomObject[polylinec];
-	                        for(int polylinei=0;polylinei<polylinec;polylinei++){
-	                            IomObject polyline=boundary.getattrobj("polyline",polylinei);
-	                            polylines[polylinei]=polyline;
-	                        }
-                            os.write(helper.polyline2wkb(polylines,true,asCurvePolygon,strokeP));
+						IomObject polylines[]=new IomObject[polylinec];
+
+						for(int polylinei=0;polylinei<polylinec;polylinei++){
+							IomObject polyline=boundary.getattrobj("polyline",polylinei);
+							polylines[polylinei]=polyline;
 						}
+						os.write(helper.polyline2wkb(polylines, true, asCurvePolygon, strokeP, repairTouchingLine).wkb);
 					}else{
 						//IFMEFeature fmeLine=session.createFeature();
 						com.vividsolutions.jts.geom.CoordinateList jtsLine=new com.vividsolutions.jts.geom.CoordinateList();
@@ -779,6 +839,7 @@ public class Iox2wkb {
         int typeInt = geometryType + flag3D;
 	    os.writeInt(typeInt);
 	  }
+
 	  private void writeCoord(double xCoord,double yCoord,double zCoord)
 	  {
 		    os.writeDouble(xCoord);
