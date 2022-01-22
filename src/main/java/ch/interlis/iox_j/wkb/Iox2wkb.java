@@ -27,11 +27,9 @@ import ch.interlis.iom.IomObject;
 import ch.interlis.iom_j.itf.impl.jtsext.geom.ArcSegment;
 import ch.interlis.iox_j.jts.Iox2jtsException;
 import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.CoordinateList;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /** Utility to convert from INTERLIS to WKB geometry.
@@ -190,7 +188,7 @@ public class Iox2wkb {
 		writeCoord(xCoord,yCoord,zCoord);
 	}
 
-	private static Coordinate arcCenterCoord2JTS(IomObject value) throws Iox2wkbException {
+	private static Coordinate arcSupportingCoord2JTS(IomObject value) throws Iox2wkbException {
 		String a1=value.getattrvalue("A1");
 		String a2=value.getattrvalue("A2");
 		double arcPt_re;
@@ -228,16 +226,16 @@ public class Iox2wkb {
 			}catch(Exception ex){
 				throw new Iox2wkbException("failed to read C2 <"+c2+">",ex);
 			}
-			Coordinate arcCenter = arcCenterCoord2JTS(value);
+			Coordinate arcSupport = arcSupportingCoord2JTS(value);
 			if(p==0.0){
-				ret.add(arcCenter);
+				ret.add(arcSupport);
 				ret.add(new com.vividsolutions.jts.geom.Coordinate(pt2_re, pt2_ho));
 				return;
 			}
 			int lastCoord=ret.size();
 			com.vividsolutions.jts.geom.Coordinate p1=null;
 			p1=ret.getCoordinate(lastCoord-1);
-			ArcSegment arc=new ArcSegment(p1, arcCenter,new Coordinate(pt2_re, pt2_ho),p);
+			ArcSegment arc=new ArcSegment(p1, arcSupport,new Coordinate(pt2_re, pt2_ho),p);
 			Coordinate[] coords = arc.getCoordinates();
 			for(int i=1;i<coords.length;i++) {
 	            ret.add(coords[i]);
@@ -441,7 +439,7 @@ public class Iox2wkb {
 					if (repairTouchingLine && currentLine.contains(segmentCoordinate) && !currentLine.get(0).equals(segmentCoordinate)){
 						PolylineCoordList splitLine = currentLine.splitTailAt(segmentCoordinate);
 						if (splitLine.getWkbType() == WKBConstants.wkbCircularString){
-							splitLine.add(arcCenterCoord2JTS(segment));
+							splitLine.add(arcSupportingCoord2JTS(segment));
 						}
 						splitLine.add(segmentCoordinate);
 						lines.add(splitLine);
@@ -452,11 +450,11 @@ public class Iox2wkb {
 					}
 					else if(segment.getobjecttag().equals("ARC") && !asCompoundCurve){
 						if(p==0.0){
-							currentLine.add(arcCenterCoord2JTS(segment));
+							currentLine.add(arcSupportingCoord2JTS(segment));
 							currentLine.add(segmentCoordinate);
 						} else {
 							Coordinate lastCoordinate = currentLine.get(currentLine.size() - 1);
-							ArcSegment arc = new ArcSegment(lastCoordinate, arcCenterCoord2JTS(segment), segmentCoordinate, p);
+							ArcSegment arc = new ArcSegment(lastCoordinate, arcSupportingCoord2JTS(segment), segmentCoordinate, p);
 							for (Coordinate c: arc.getCoordinates()) {
 								currentLine.add(c);
 							}
@@ -464,7 +462,7 @@ public class Iox2wkb {
 					}
 					else if (segment.getobjecttag().equals("ARC") && currentLine.trySetWkbType(WKBConstants.wkbCircularString))
 					{
-						currentLine.add(arcCenterCoord2JTS(segment));
+						currentLine.add(arcSupportingCoord2JTS(segment));
 						currentLine.add(segmentCoordinate);
 					}
 					else {
