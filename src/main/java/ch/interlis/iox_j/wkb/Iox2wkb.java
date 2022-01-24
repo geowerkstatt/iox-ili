@@ -448,7 +448,7 @@ public class Iox2wkb {
 					if(segment.getobjecttag().equals("COORD") && currentLine.trySetWkbType(WKBConstants.wkbLineString)) {
 						currentLine.add(segmentCoordinate);
 					}
-					else if(segment.getobjecttag().equals("ARC") && !asCompoundCurve){
+					else if(segment.getobjecttag().equals("ARC") && !asCompoundCurve && currentLine.trySetWkbType(WKBConstants.wkbLineString)){
 						if(p==0.0){
 							currentLine.add(arcSupportingCoord2JTS(segment));
 							currentLine.add(segmentCoordinate);
@@ -477,7 +477,7 @@ public class Iox2wkb {
 			for (int linec = 0; linec < lines.size(); linec++) {
 				PolylineCoordList line = lines.get(linec);
 				os.reset();
-				if (asCompoundCurve)
+				if (asCompoundCurve || !isSurfaceOrArea)
 				{
 					writeByteOrder();
 					writeGeometryType(line.getWkbType());
@@ -640,20 +640,28 @@ public class Iox2wkb {
 		if(obj==null){
 			return null;
 		}
-	    try {
+
+		List<IomObject> polylines = new ArrayList<IomObject>();
+		int polylinec=obj.getattrvaluecount(Wkb2iox.ATTR_POLYLINE);
+
+		for(int polylinei=0;polylinei<polylinec;polylinei++){
+			polylines.add(obj.getattrobj("polyline",polylinei));
+		}
+
+		byte[][] wkbs = new Iox2wkb(outputDimension,os.order(),asEWKB).polyline2wkb(polylines.toArray(new IomObject[0]), false, asCurve, strokeP, false);
+
+		try {
+			os.reset();
 			writeByteOrder();
 			if(asCurve){
 				writeGeometryType(WKBConstants.wkbMultiCurve);
 			}else{
 				writeGeometryType(WKBConstants.wkbMultiLineString);
 			}
-			int polylinec=obj.getattrvaluecount(Wkb2iox.ATTR_POLYLINE);
-			os.writeInt(polylinec);
 
-			for(int polylinei=0;polylinei<polylinec;polylinei++){
-				IomObject polyline=obj.getattrobj("polyline",polylinei);
-                Iox2wkb helper=new Iox2wkb(outputDimension,os.order(),asEWKB);
-				os.write(helper.polyline2wkb(polyline,false,asCurve,strokeP));
+			os.writeInt(wkbs.length);
+			for (byte[] wkb: wkbs) {
+				os.write(wkb);
 			}
 		} catch (IOException e) {
 	        throw new RuntimeException("Unexpected IO exception: " + e.getMessage());
