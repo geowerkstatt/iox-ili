@@ -606,7 +606,14 @@ public class Iox2wkb {
 		}
 		return os.toByteArray();
 	}
-	public byte[] multisurface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP) //SurfaceOrAreaType type)
+
+	public byte[] multisurface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP)
+	throws Iox2wkbException
+	{
+		return multisurface2wkb(obj, asCurvePolygon, strokeP, true);
+	}
+
+	public byte[] multisurface2wkb(IomObject obj,boolean asCurvePolygon,double strokeP, boolean repairTouchingLine) //SurfaceOrAreaType type)
 	throws Iox2wkbException
 	{
 		if(obj==null){
@@ -627,7 +634,7 @@ public class Iox2wkb {
 				IomObject iomSurfaceClone=new ch.interlis.iom_j.Iom_jObject("MULTISURFACE",null);
 				iomSurfaceClone.addattrobj("surface",surface);
                 Iox2wkb helper=new Iox2wkb(outputDimension,os.order(),asEWKB);
-				os.write(helper.surface2wkb(iomSurfaceClone,asCurvePolygon,strokeP));
+				os.write(helper.surface2wkb(iomSurfaceClone,asCurvePolygon,strokeP, repairTouchingLine));
 			}
 		} catch (IOException e) {
 	        throw new RuntimeException("Unexpected IO exception: " + e.getMessage());
