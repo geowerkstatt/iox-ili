@@ -394,7 +394,7 @@ import java.util.ArrayList;
 		    }
 		}
 
-		public void setattrvalue(String attrName, int index, String value) {
+		public void changeattrvalue(String attrName, int index, String value) {
 			if (value == null) {
 				throw new IllegalArgumentException("Illegal value null for " + attrName);
 			} else {
