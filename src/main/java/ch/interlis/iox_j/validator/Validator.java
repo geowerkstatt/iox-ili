@@ -49,6 +49,7 @@ import ch.interlis.ili2c.metamodel.EnumTreeValueType;
 import ch.interlis.ili2c.metamodel.EnumerationType;
 import ch.interlis.ili2c.metamodel.Evaluable;
 import ch.interlis.ili2c.metamodel.ExistenceConstraint;
+import ch.interlis.ili2c.metamodel.ExpressionSelection;
 import ch.interlis.ili2c.metamodel.Expression.Conjunction;
 import ch.interlis.ili2c.metamodel.Expression.DefinedCheck;
 import ch.interlis.ili2c.metamodel.Expression.Disjunction;
@@ -81,6 +82,7 @@ import ch.interlis.ili2c.metamodel.ParameterValue;
 import ch.interlis.ili2c.metamodel.PathEl;
 import ch.interlis.ili2c.metamodel.PathElAbstractClassRole;
 import ch.interlis.ili2c.metamodel.PathElAssocRole;
+import ch.interlis.ili2c.metamodel.PathElBase;
 import ch.interlis.ili2c.metamodel.PathElRefAttr;
 import ch.interlis.ili2c.metamodel.PathElThis;
 import ch.interlis.ili2c.metamodel.PlausibilityConstraint;
@@ -103,6 +105,7 @@ import ch.interlis.ili2c.metamodel.Type;
 import ch.interlis.ili2c.metamodel.TypeAlias;
 import ch.interlis.ili2c.metamodel.UniquenessConstraint;
 import ch.interlis.ili2c.metamodel.Viewable;
+import ch.interlis.ili2c.metamodel.ViewableAlias;
 import ch.interlis.ili2c.metamodel.ViewableTransferElement;
 import ch.interlis.ili2c.parser.Ili23Parser;
 import ch.interlis.ilirepository.Dataset;
@@ -194,7 +197,7 @@ public class Validator implements ch.interlis.iox.IoxValidator {
 	private Map<AttributeDef, Boolean> areaAttrsAreSurfaceTopologiesValid = new HashMap<AttributeDef, Boolean>();
 	private Map<String,Class> customFunctions=new HashMap<String,Class>(); // qualified Interlis function name -> java class that implements that function
 	private List<ExternalObjectResolver> extObjResolvers=null; // java class that implements ExternalObjectResolver
-	private HashMap<Constraint,Viewable> additionalConstraints=new HashMap<Constraint,Viewable>();
+	private HashMap<Constraint, Projection> additionalConstraints=new HashMap<Constraint, Projection>();
 	private Map<PlausibilityConstraint, PlausibilityPoolValue> plausibilityConstraints=new LinkedHashMap<PlausibilityConstraint, PlausibilityPoolValue>();
 	private HashSet<String> configOffOufputReduction =new HashSet<String>();
 	private HashSet<String> setConstraintOufputReduction =new HashSet<String>();
@@ -394,11 +397,6 @@ public class Validator implements ch.interlis.iox.IoxValidator {
 		} else if (event instanceof ch.interlis.iox.EndBasketEvent){
 		    cleanupCurrentBasket();
 		}else if (event instanceof ch.interlis.iox.EndTransferEvent){
-	        String additionalModels=this.validationConfig.getConfigValue(ValidationConfig.PARAMETER, ValidationConfig.ADDITIONAL_MODELS);
-	        if(additionalModels!=null){
-	            String[] additionalModelv = additionalModels.split(";");
-	            iterateThroughAdditionalModels(additionalModelv);
-	        }
 			if(autoSecondPass){
 				doSecondPass();
 			}
@@ -635,12 +633,60 @@ public class Validator implements ch.interlis.iox.IoxValidator {
     public void doSecondPass() {
         if(!singlePass) {
             errs.addEvent(errFact.logInfoMsg(rsrc.getString("doSecondPass.secondValidationPass")));
+            iterateThroughReferencedModels();
+            String additionalModelsConfig = validationConfig.getConfigValue(ValidationConfig.PARAMETER, ValidationConfig.ADDITIONAL_MODELS);
+            if (additionalModelsConfig != null) {
+                String[] additionalModels = additionalModelsConfig.split(";");
+                iterateThroughAdditionalModels(additionalModels);
+            }
             iterateThroughAllObjects();
             validateAllAreas();
             validatePlausibilityConstraints();
         }
-	}
-	
+    }
+
+    private void iterateThroughReferencedModels() {
+        HashSet<String> iteratedModels = new HashSet<String>();
+        for (String modelName : seenModels) {
+            Element modelElement = td.getElement(modelName);
+            if (modelElement instanceof DataModel) {
+                DataModel model = (DataModel) modelElement;
+                iterateThroughReferencedModel(model, iteratedModels);
+            }
+        }
+    }
+
+    private void iterateThroughReferencedModel(DataModel model, HashSet<String> iteratedModels) {
+        if (iteratedModels.contains(model.getName())) {
+            return;
+        }
+        iteratedModels.add(model.getName());
+
+        Iterator<Element> modelIterator = model.iterator();
+        while (modelIterator.hasNext()) {
+            Element modelEntry = modelIterator.next();
+            if (!(modelEntry instanceof Topic)) {
+                continue;
+            }
+            Topic topic = (Topic) modelEntry;
+
+            Iterator<Element> topicIterator = topic.iterator();
+            while (topicIterator.hasNext()) {
+                Element topicEntry = topicIterator.next();
+                if (topicEntry instanceof Projection) {
+                    Projection view = (Projection) topicEntry;
+                    collectProjectionConstraints(view);
+                }
+            }
+        }
+
+        for (Model importedModel : model.getImporting()) {
+            if (importedModel instanceof DataModel) {
+                iterateThroughReferencedModel((DataModel) importedModel, iteratedModels);
+            }
+        }
+    }
+
 	private void iterateThroughAdditionalModels(String[] additionalModels){
 		if(additionalModels==null){
 			return;
@@ -697,39 +743,39 @@ public class Validator implements ch.interlis.iox.IoxValidator {
 				}
 				// view
 				Projection view = (Projection) topicObj;
-				Viewable classValue=null;
-				if(view.getSelected().getAliasing()==null){
-					continue;
-				}
-				// class
-				classValue = view.getSelected().getAliasing();
-				// constraint								
-				Iterator iteratorOfViewConstraints=view.iterator();
-				while (iteratorOfViewConstraints.hasNext()){
-					Object constraintObj = iteratorOfViewConstraints.next();
-					if(!(constraintObj instanceof Constraint)){
-						continue;
-					}
-					// constraint off
-					Constraint constraint = (Constraint) constraintObj;
-					String constraintName = getScopedName(constraint);
-					String checkConstraint=null;
-					if(!enforceConstraintValidation){
-						checkConstraint=validationConfig.getConfigValue(constraintName, ValidationConfig.CHECK);
-					}
-					if(ValidationConfig.OFF.equals(checkConstraint)){
-						if(!configOffOufputReduction.contains(ValidationConfig.CHECK+":"+constraintName)){
-							configOffOufputReduction.add(ValidationConfig.CHECK+":"+constraintName);
-							errs.addEvent(errFact.logInfoMsg(rsrc.getString("collectAdditionalConstraints.validationConfigurationCheckOff"), constraintName));
-						}
-					}else{
-						additionalConstraints.put(constraint, classValue);
-					}
-				}
+				collectProjectionConstraints(view);
 			}
 		}
 	}
-	
+
+	private void collectProjectionConstraints(Projection view) {
+		if(view.getSelected().getAliasing()==null){
+			return;
+		}
+		// constraint
+		Iterator iteratorOfViewConstraints=view.iterator();
+		while (iteratorOfViewConstraints.hasNext()){
+			Object constraintObj = iteratorOfViewConstraints.next();
+			if(!(constraintObj instanceof Constraint)){
+				continue;
+			}
+			Constraint constraint = (Constraint) constraintObj;
+			String constraintName = getScopedName(constraint);
+			String checkConstraint=null;
+			if(!enforceConstraintValidation){
+				checkConstraint=validationConfig.getConfigValue(constraintName, ValidationConfig.CHECK);
+			}
+			if(ValidationConfig.OFF.equals(checkConstraint)){
+				if(!configOffOufputReduction.contains(ValidationConfig.CHECK+":"+constraintName)){
+					configOffOufputReduction.add(ValidationConfig.CHECK+":"+constraintName);
+					errs.addEvent(errFact.logInfoMsg(rsrc.getString("collectAdditionalConstraints.validationConfigurationCheckOff"), constraintName));
+				}
+			}else{
+				additionalConstraints.put(constraint, view);
+			}
+		}
+	}
+
 	private void validateAllAreas() {
 		setCurrentMainObj(null);
 		for(AttributeDef attr:areaAttrs.keySet()){
@@ -838,10 +884,11 @@ public class Validator implements ch.interlis.iox.IoxValidator {
 					Viewable classOfCurrentObj= (Viewable) modelElement;
 					if(!ValidationConfig.OFF.equals(constraintValidation)){
 						// additional constraint
-						for (Map.Entry<Constraint,Viewable> additionalConstraintsEntry : additionalConstraints.entrySet()) {
+						for (Map.Entry<Constraint, Projection> additionalConstraintsEntry : additionalConstraints.entrySet()) {
 							Constraint additionalConstraint = additionalConstraintsEntry.getKey();
-							Viewable classOfAdditionalConstraint = additionalConstraintsEntry.getValue();
-							if(classOfCurrentObj.isExtending(classOfAdditionalConstraint)) {
+							Projection view = additionalConstraintsEntry.getValue();
+							Viewable<?> classOfAdditionalConstraint = view.getSelected().getAliasing();
+							if (classOfCurrentObj.isExtending(classOfAdditionalConstraint) && viewIncludesObject(view, iomObj)) {
 								if(additionalConstraint instanceof ExistenceConstraint) {
 									ExistenceConstraint existenceConstraint = (ExistenceConstraint) additionalConstraint;
 									validateExistenceConstraint(iomObj, existenceConstraint);
@@ -946,6 +993,23 @@ public class Validator implements ch.interlis.iox.IoxValidator {
 				validateSetConstraint(setConstraint);
 			}
 		}
+	}
+
+	private boolean viewIncludesObject(Projection view, IomObject iomObj) {
+		String viewName = getScopedName(view);
+		Iterator<?> viewIterator = view.iterator();
+		while (viewIterator.hasNext()) {
+			Object viewEntry = viewIterator.next();
+			if (viewEntry instanceof ExpressionSelection) {
+				ExpressionSelection selection = (ExpressionSelection) viewEntry;
+				Evaluable whereExpression = selection.getCondition();
+				Value result = evaluateExpression(null, null, viewName, iomObj, whereExpression, null);
+				if (!result.skipEvaluation() && !result.isTrue()) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	private void updateCurrentBasket(String basketId) {
@@ -2180,6 +2244,14 @@ public class Validator implements ch.interlis.iox.IoxValidator {
                     }
                 } else if (currentPathEl instanceof PathElThis) {
                     nextCurrentObjects.addAll(currentObjects);
+                } else if (currentPathEl instanceof PathElBase) {
+                    Viewable<?> viewable = ((PathElBase) currentPathEl).getCurrentViewable();
+                    if (viewable instanceof Projection) {
+                        ViewableAlias alias = ((Projection) viewable).getSelected();
+                        if (alias.getName().equals(currentPathEl.getName())) {
+                            nextCurrentObjects.addAll(currentObjects);
+                        }
+                    }
                 }
                 
             }
