@@ -63,6 +63,8 @@ public class MathFunction24Test {
     private final static String CLASSC = TOPIC + ".ClassC";
     private final static String CLASSD = TOPIC + ".ClassD";
     private final static String CLASSE = TOPIC + ".ClassE";
+    private final static String CLASSG = TOPIC + ".ClassG";
+    private final static String CLASSH = TOPIC + ".ClassH";
     
     // STRUCTURE
     private final static String STRUCTA = TOPIC + ".StructA";
@@ -81,7 +83,7 @@ public class MathFunction24Test {
         // ili-datei lesen
         Configuration ili2cConfig = new Configuration();
         {
-            FileEntry fileEntry = new FileEntry("src/test/data/validator/Math_V2.ili", FileEntryKind.ILIMODELFILE);
+            FileEntry fileEntry = new FileEntry("src/test/data/validator/Math_V2_1.ili", FileEntryKind.ILIMODELFILE);
             ili2cConfig.addFileEntry(fileEntry);
         }
         {
@@ -701,6 +703,77 @@ public class MathFunction24Test {
         assertEquals(0, logger.getErrs().size());
     }
     
+    @Test
+    public void modulo_Ok() {
+        String[][] testCases = {
+            { "Positive numbers", "8", "3", "2" },
+            { "a Negative", "-8", "3", "1" },
+            { "b Negative", "8", "-3", "2" },
+            { "Both Negative", "-8", "-3", "1" },
+            { "a equal b", "5", "5", "0" },
+            { "b Zero", "5", "0", null },
+            { "Decimal numbers", "-8.59", "3.1", "0.71" },
+            { "a absent", null, "0", null },
+            { "b absent", "5", null, null },
+            { "large a", "9999999951", "97", "0" },
+        };
+
+        for (int i = 0; i < testCases.length; i++) {
+            String[] testCase = testCases[i];
+            Iom_jObject iomObj = new Iom_jObject(CLASSG, "o" + i);
+            if (testCase[1] != null) iomObj.setattrvalue("a", testCase[1]);
+            if (testCase[2] != null) iomObj.setattrvalue("b", testCase[2]);
+            if (testCase[3] != null) iomObj.setattrvalue("expected", testCase[3]);
+
+            ValidationConfig modelConfig = new ValidationConfig();
+            LogCollector logger = new LogCollector();
+            LogEventFactory errFactory = new LogEventFactory();
+            Settings settings = new Settings();
+
+            Validator validator = new Validator(td, modelConfig, logger, errFactory, settings);
+            validator.validate(new StartTransferEvent());
+            validator.validate(new StartBasketEvent(TOPIC, BID1));
+            validator.validate(new ObjectEvent(iomObj));
+            validator.validate(new EndBasketEvent());
+            validator.validate(new EndTransferEvent());
+
+            // Asserts
+            assertEquals("Test case: " + testCase[0] + " (" + testCase[1] + " mod " + testCase[2] + " = " + testCase[3] + ")", 0, logger.getErrs().size());
+        }
+    }
+
+    @Test
+    public void toNumeric_Ok() {
+        String[][] testCases = {
+                { "Positive numbers", "38", "38" },
+                { "Negative number", "-835", "-835" },
+                { "Decimal numbers", "-8.59", "-8.59" },
+                { "Undefined attribute", null, null },
+        };
+
+        for (int i = 0; i < testCases.length; i++) {
+            String[] testCase = testCases[i];
+            Iom_jObject iomObj = new Iom_jObject(CLASSH, "o" + i);
+            if (testCase[1] != null) iomObj.setattrvalue("a", testCase[1]);
+            if (testCase[2] != null) iomObj.setattrvalue("expected", testCase[2]);
+
+            ValidationConfig modelConfig = new ValidationConfig();
+            LogCollector logger = new LogCollector();
+            LogEventFactory errFactory = new LogEventFactory();
+            Settings settings = new Settings();
+
+            Validator validator = new Validator(td, modelConfig, logger, errFactory, settings);
+            validator.validate(new StartTransferEvent());
+            validator.validate(new StartBasketEvent(TOPIC, BID1));
+            validator.validate(new ObjectEvent(iomObj));
+            validator.validate(new EndBasketEvent());
+            validator.validate(new EndTransferEvent());
+
+            // Asserts
+            assertEquals("Test case: " + testCase[0] + " (toNumeric(" + testCase[1] + ") = " + testCase[2] + ")", 0, logger.getErrs().size());
+        }
+    }
+
     // #############################################################//
     // ######################### FAIL ##############################//
     // #############################################################//
