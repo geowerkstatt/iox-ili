@@ -20,7 +20,7 @@ INTERLIS 2.4;
 
 !!@ technicalContact = mailto:dmav@swisstopo.ch
 !!@ furtherInformation = https://www.cadastre.ch/de/manual-av/method/dmav.html
-TYPE MODEL DMAVTYM_Topologie_V1_0 (de)
+TYPE MODEL DMAVTYM_Topologie_V1_1 (de)
   AT "https://models.geo.admin.ch/V_D/" VERSION "2025-05-06" =
 
   FUNCTION covers(
