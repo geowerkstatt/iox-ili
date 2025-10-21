@@ -410,4 +410,41 @@ public class DmavtymTopologie24Test {
                 "Mandatory Constraint DMAVTYM_Topologie_Function24.Topic.PointClass.pointIsInsideSurface_V1_1 is not true.");
         assertThat(logger.getWarn(), is(empty()));
     }
+
+    @Test
+    public void pointIsInsideSurfaceInsideTolerance() {
+        Iom_jObject surface = new Iom_jObject(CLASS_SURFACE, "o1");
+        surface.addattrobj("surface", IomObjectHelper.createPolygonFromBoundaries(
+                IomObjectHelper.createBoundary(
+                        IomObjectHelper.createCoord("10", "10"),
+                        IomObjectHelper.createCoord("30", "10"),
+                        IomObjectHelper.createCoord("30", "20"),
+                        IomObjectHelper.createCoord("10", "10"))));
+
+        Iom_jObject point = new Iom_jObject(CLASS_POINT, "o2");
+        point.addattrobj("point", IomObjectHelper.createCoord("10.003", "10.002"));
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC, surface, point);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void pointIsInsideSurfaceOutsideTolerance() {
+        Iom_jObject surface = new Iom_jObject(CLASS_SURFACE, "o1");
+        surface.addattrobj("surface", IomObjectHelper.createPolygonFromBoundaries(
+                IomObjectHelper.createBoundary(
+                        IomObjectHelper.createCoord("10", "10"),
+                        IomObjectHelper.createCoord("30", "10"),
+                        IomObjectHelper.createCoord("30", "20"),
+                        IomObjectHelper.createCoord("10", "10"))));
+
+        Iom_jObject point = new Iom_jObject(CLASS_POINT, "o2");
+        point.addattrobj("point", IomObjectHelper.createCoord("10.004", "10.003"));
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC, surface, point);
+        LogCollectorAssertions.AssertAllEventMessages(logger.getErrs(),
+                "Mandatory Constraint DMAVTYM_Topologie_Function24.Topic.PointClass.pointIsInsideSurface_V1_1 is not true.");
+        assertThat(logger.getWarn(), is(empty()));
+    }
 }
