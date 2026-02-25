@@ -90,4 +90,24 @@ MODEL DMAVTYM_Topologie_Function24
                 DMAVTYM_Topologie_V1_1.pointInPoints(THIS, attribute, Elements_V1_0.valuesOfPathAnyStructure(referencePoints, "geometry"), UNDEFINED) == expected;
         END TestCase;
     END PointInPoints;
+
+    TOPIC GeometricFilter =
+        DOMAIN
+            Coord2 = COORD
+                0.000 .. 1000.000,
+                0.000 .. 1000.000;
+
+        CLASS FilterSurfaceClass =
+            id: TEXT;
+            surface: MANDATORY SURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+        END FilterSurfaceClass;
+
+        CLASS FilterTestCase =
+            testPoint: Coord2;
+            expectedCount: MANDATORY 0 .. 100;
+
+            MANDATORY CONSTRAINT filterResult:
+                INTERLIS.objectCount(DMAVTYM_Topologie_V1_1.geometricFilter(THIS, >>testPoint, ObjectPool_V1_0.allObjects(>FilterSurfaceClass), >>FilterSurfaceClass->surface)) == expectedCount;
+        END FilterTestCase;
+    END GeometricFilter;
 END DMAVTYM_Topologie_Function24.
