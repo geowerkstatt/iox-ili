@@ -99,7 +99,7 @@ MODEL DMAVTYM_Topologie_Function24
 
         CLASS FilterSurfaceClass =
             id: TEXT;
-            surface: MANDATORY SURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
+            surface: MANDATORY MULTISURFACE WITH (STRAIGHTS, ARCS) VERTEX Coord2 WITHOUT OVERLAPS > 0.002;
         END FilterSurfaceClass;
 
         CLASS FilterTestCase =

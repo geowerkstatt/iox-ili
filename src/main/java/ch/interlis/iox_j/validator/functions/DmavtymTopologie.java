@@ -33,6 +33,7 @@ import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
+import com.vividsolutions.jts.geom.MultiPolygon;
 import com.vividsolutions.jts.geom.Point;
 import com.vividsolutions.jts.index.ItemVisitor;
 import com.vividsolutions.jts.index.strtree.STRtree;
@@ -497,6 +498,10 @@ public class DmavtymTopologie {
         return (CurvePolygon) Iox2jtsext.surface2JTS(surface, 0.0, new OutParam<Boolean>(), logger, 0.0, validationKind);
     }
 
+    private MultiPolygon getMultiSurface(IomObject multiSurface, String validationKind) throws IoxException {
+        return Iox2jtsext.multisurface2JTS(multiSurface, 0.0, new OutParam<Boolean>(), logger, 0.0, validationKind);
+    }
+
     private Value evaluatePointInPoints(String validationKind, String usageScope, IomObject mainObj, Value[] actualArguments) {
         Value argPointObjects = actualArguments[0];
         Value argPointAttr = actualArguments[1];
@@ -627,7 +632,7 @@ public class DmavtymTopologie {
             }
 
             try {
-                CurvePolygon surface = getSurface(object.getattrobj(surfaceAttr, 0), validationKind);
+                MultiPolygon surface = getMultiSurface(object.getattrobj(surfaceAttr, 0), validationKind);
                 Envelope envelope = surface.getEnvelopeInternal();
                 envelope.expandBy(tolerance);
                 if (envelope.contains(point.getCoordinate()) && surface.buffer(tolerance).covers(point)) {

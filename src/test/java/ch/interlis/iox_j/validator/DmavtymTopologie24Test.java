@@ -1061,4 +1061,29 @@ public class DmavtymTopologie24Test {
         assertThat(logger.getErrs(), is(empty()));
         assertThat(logger.getWarn(), is(empty()));
     }
+
+    @Test
+    public void geometricFilterMultiSurface() {
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "MultiSurface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createMultiPolygon(
+                IomObjectHelper.createPolygonFromBoundaries(
+                        IomObjectHelper.createRectangleBoundary("10", "10", "70", "70"),
+                        IomObjectHelper.createRectangleBoundary("20", "20", "60", "60")),
+                IomObjectHelper.createRectangleGeometry("30", "30", "50", "50")));
+
+        // Point inside the multi-polygon
+        Iom_jObject testObj1 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj1.addattrobj("testPoint", IomObjectHelper.createCoord("40", "40"));
+        testObj1.setattrvalue("expectedCount", "1");
+
+        // Point outside the multi-polygon
+        Iom_jObject testObj2 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test2");
+        testObj2.addattrobj("testPoint", IomObjectHelper.createCoord("25", "25"));
+        testObj2.setattrvalue("expectedCount", "0");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj1, testObj2);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
 }
