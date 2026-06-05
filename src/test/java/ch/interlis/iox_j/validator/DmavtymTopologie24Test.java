@@ -31,6 +31,10 @@ public class DmavtymTopologie24Test {
     private final static String CLASS_POINT_IN_POINTS_TEST = TOPIC_POINT_IN_POINTS + ".TestCase";
     private final static String STRUCT_POINT_IN_POINTS_POINT = TOPIC_POINT_IN_POINTS + ".Point";
 
+    private final static String TOPIC_GEOMETRIC_FILTER = MODEL + ".GeometricFilter";
+    private final static String CLASS_GEOMETRIC_FILTER_SURFACE = TOPIC_GEOMETRIC_FILTER + ".FilterSurfaceClass";
+    private final static String CLASS_GEOMETRIC_FILTER_TEST = TOPIC_GEOMETRIC_FILTER + ".FilterTestCase";
+
     private TransferDescription td;
 
     @Before
@@ -884,5 +888,202 @@ public class DmavtymTopologie24Test {
         Iom_jObject point = new Iom_jObject(STRUCT_POINT_IN_POINTS_POINT, null);
         point.addattrobj("geometry", IomObjectHelper.createCoord(x, y));
         return point;
+    }
+
+    @Test
+    public void geometricFilterPointInsideSingleSurface() {
+        // Create a surface object
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "30", "30"));
+
+        // Create a test with a point inside the surface - should match 1 object
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("20", "20"));
+        testObj.setattrvalue("expectedCount", "1");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterPointOutsideSurface() {
+        // Create a surface object
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "30", "30"));
+
+        // Create a test with a point outside the surface - should match 0 objects
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("50", "50"));
+        testObj.setattrvalue("expectedCount", "0");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterPointOnBoundary() {
+        // Create a surface object
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "30", "30"));
+
+        // Create a test with a point on the boundary - should match 1 object (with tolerance)
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("10", "20"));
+        testObj.setattrvalue("expectedCount", "1");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterPointInsideMultipleSurfaces() {
+        // Create multiple surface objects
+        Iom_jObject surface1 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surface1.setattrvalue("id", "Surface1");
+        surface1.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "50", "50"));
+
+        Iom_jObject surface2 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s2");
+        surface2.setattrvalue("id", "Surface2");
+        surface2.addattrobj("surface", IomObjectHelper.createRectangleGeometry("20", "20", "60", "60"));
+
+        Iom_jObject surface3 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s3");
+        surface3.setattrvalue("id", "Surface3");
+        surface3.addattrobj("surface", IomObjectHelper.createRectangleGeometry("100", "100", "150", "150"));
+
+        // Point at (30, 30) is inside surface1 and surface2 but not surface3
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("30", "30"));
+        testObj.setattrvalue("expectedCount", "2");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surface1, surface2, surface3, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterPointOutsideAllSurfaces() {
+        // Create multiple surface objects
+        Iom_jObject surface1 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surface1.setattrvalue("id", "Surface1");
+        surface1.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "30", "30"));
+
+        Iom_jObject surface2 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s2");
+        surface2.setattrvalue("id", "Surface2");
+        surface2.addattrobj("surface", IomObjectHelper.createRectangleGeometry("40", "40", "60", "60"));
+
+        // Point at (100, 100) is outside all surfaces
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("100", "100"));
+        testObj.setattrvalue("expectedCount", "0");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surface1, surface2, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterNoSurfaces() {
+        // Create a test with no surface objects - should match 0 objects
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("20", "20"));
+        testObj.setattrvalue("expectedCount", "0");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterSurfaceWithArc() {
+        // Create a surface with an arc
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createPolygonFromBoundaries(
+                IomObjectHelper.createBoundary(
+                        IomObjectHelper.createCoord("10", "10"),
+                        IomObjectHelper.createCoord("30", "10"),
+                        IomObjectHelper.createArc("22", "22", "10", "30"),
+                        IomObjectHelper.createCoord("10", "10"))));
+
+        // Point inside the curved surface
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("15", "15"));
+        testObj.setattrvalue("expectedCount", "1");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterSurfaceWithHole() {
+        // Create a surface with a hole (outer boundary and inner boundary)
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createPolygonFromBoundaries(
+                IomObjectHelper.createRectangleBoundary("10", "10", "50", "50"),
+                IomObjectHelper.createRectangleBoundary("20", "20", "40", "40")));
+
+        // Point inside the hole - should not match
+        Iom_jObject testObj1 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj1.addattrobj("testPoint", IomObjectHelper.createCoord("30", "30"));
+        testObj1.setattrvalue("expectedCount", "0");
+
+        // Point in the surface but outside the hole - should match
+        Iom_jObject testObj2 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test2");
+        testObj2.addattrobj("testPoint", IomObjectHelper.createCoord("15", "15"));
+        testObj2.setattrvalue("expectedCount", "1");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj1, testObj2);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterPointAtCorner() {
+        // Create a surface object
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "Surface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createRectangleGeometry("10", "10", "30", "30"));
+
+        // Create a test with a point at the corner - should match 1 object (with tolerance)
+        Iom_jObject testObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj.addattrobj("testPoint", IomObjectHelper.createCoord("10", "10"));
+        testObj.setattrvalue("expectedCount", "1");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
+    }
+
+    @Test
+    public void geometricFilterMultiSurface() {
+        Iom_jObject surfaceObj = new Iom_jObject(CLASS_GEOMETRIC_FILTER_SURFACE, "s1");
+        surfaceObj.setattrvalue("id", "MultiSurface1");
+        surfaceObj.addattrobj("surface", IomObjectHelper.createMultiPolygon(
+                IomObjectHelper.createPolygonFromBoundaries(
+                        IomObjectHelper.createRectangleBoundary("10", "10", "70", "70"),
+                        IomObjectHelper.createRectangleBoundary("20", "20", "60", "60")),
+                IomObjectHelper.createRectangleGeometry("30", "30", "50", "50")));
+
+        // Point inside the multi-polygon
+        Iom_jObject testObj1 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test1");
+        testObj1.addattrobj("testPoint", IomObjectHelper.createCoord("40", "40"));
+        testObj1.setattrvalue("expectedCount", "1");
+
+        // Point outside the multi-polygon
+        Iom_jObject testObj2 = new Iom_jObject(CLASS_GEOMETRIC_FILTER_TEST, "test2");
+        testObj2.addattrobj("testPoint", IomObjectHelper.createCoord("25", "25"));
+        testObj2.setattrvalue("expectedCount", "0");
+
+        LogCollector logger = ValidatorTestHelper.validateObjects(td, TOPIC_GEOMETRIC_FILTER, surfaceObj, testObj1, testObj2);
+        assertThat(logger.getErrs(), is(empty()));
+        assertThat(logger.getWarn(), is(empty()));
     }
 }

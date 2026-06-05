@@ -33,6 +33,7 @@ import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryCollection;
+import com.vividsolutions.jts.geom.MultiPolygon;
 import com.vividsolutions.jts.geom.Point;
 import com.vividsolutions.jts.index.ItemVisitor;
 import com.vividsolutions.jts.index.strtree.STRtree;
@@ -95,6 +96,8 @@ public class DmavtymTopologie {
             return evaluateIsInside(validationKind, usageScope, iomObj, actualArguments);
         } else if (currentFunction.getName().equals("pointInPoints")) {
             return evaluatePointInPoints(validationKind, usageScope, iomObj, actualArguments);
+        } else if (currentFunction.getName().equals("geometricFilter")) {
+            return evaluateGeometricFilter(validationKind, usageScope, iomObj, actualArguments);
         } else {
             return Value.createNotYetImplemented();
         }
@@ -495,6 +498,10 @@ public class DmavtymTopologie {
         return (CurvePolygon) Iox2jtsext.surface2JTS(surface, 0.0, new OutParam<Boolean>(), logger, 0.0, validationKind);
     }
 
+    private MultiPolygon getMultiSurface(IomObject multiSurface, String validationKind) throws IoxException {
+        return Iox2jtsext.multisurface2JTS(multiSurface, 0.0, new OutParam<Boolean>(), logger, 0.0, validationKind);
+    }
+
     private Value evaluatePointInPoints(String validationKind, String usageScope, IomObject mainObj, Value[] actualArguments) {
         Value argPointObjects = actualArguments[0];
         Value argPointAttr = actualArguments[1];
@@ -581,6 +588,63 @@ public class DmavtymTopologie {
         }
 
         return new Value(true);
+    }
+
+    private Value evaluateGeometricFilter(String validationKind, String usageScope, IomObject mainObj, Value[] actualArguments) {
+        // All arguments must be defined
+        for (Value arg : actualArguments) {
+            if (arg.isUndefined()) {
+                return Value.createSkipEvaluation();
+            }
+        }
+
+        // Check the type of the arguments
+        Collection<IomObject> pointObjects = actualArguments[0].getComplexObjects();
+        String pointAttr = actualArguments[1].getValue();
+        Collection<IomObject> objects = actualArguments[2].getComplexObjects();
+        String surfaceAttr = actualArguments[3].getValue();
+        if (pointObjects == null || pointObjects.size() != 1 || pointAttr == null
+                || objects == null || surfaceAttr == null) {
+            return Value.createUndefined();
+        }
+
+        IomObject pointObject = pointObjects.iterator().next();
+        if (pointObject.getattrvaluecount(pointAttr) != 1) {
+            return Value.createUndefined();
+        }
+
+        // Extract point geometry
+        Point point;
+        try {
+            point = getPoint(pointObject.getattrobj(pointAttr, 0));
+        } catch (IoxException e) {
+            EhiLogger.logError(e);
+            return Value.createUndefined();
+        }
+
+        double tolerance = getPointTolerance(td, pointObject, pointAttr);
+
+        // Filter objects
+        ArrayList<IomObject> filteredObjects = new ArrayList<IomObject>();
+        for (IomObject object : objects) {
+            if (object.getattrvaluecount(surfaceAttr) != 1) {
+                continue;
+            }
+
+            try {
+                MultiPolygon surface = getMultiSurface(object.getattrobj(surfaceAttr, 0), validationKind);
+                Envelope envelope = surface.getEnvelopeInternal();
+                envelope.expandBy(tolerance);
+                if (envelope.contains(point.getCoordinate()) && surface.buffer(tolerance).covers(point)) {
+                    filteredObjects.add(object);
+                }
+            } catch (IoxException e) {
+                EhiLogger.logError(e);
+                // Continue with next object
+            }
+        }
+
+        return new Value(filteredObjects);
     }
 
     /**
