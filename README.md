@@ -23,7 +23,7 @@ iox-ili is licensed under the MIT/X License.
 To get the latest version of iox-ili, visit GitHub: https://github.com/claeis/iox-ili/.
 
 ## System Configuration
-In order to compile iox-ili, a JAVA software development kit JDK version 1.6 or a more recent version must be installed on your system.
+In order to compile iox-ili, a JAVA software development kit JDK version 1.8 or a more recent version must be installed on your system.
 Download and install the latest version of the JAVA software development kit JDK for free: http://www.oracle.com/technetwork/java/javase/.
 To build the iox-ili, use gradle. Download gradle from: https://gradle.org/ and install it.
 

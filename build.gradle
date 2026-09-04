@@ -16,11 +16,15 @@ configurations {
 //System.out.println JavaVersion.current()
 
 compileJava.options.encoding = 'US-ASCII'
+// Java 8 is the minimum supported runtime (ilivalidator#454).
+// On JDK 9+ use --release so the Java 8 API is enforced as well; on JDK 8 itself
+// --release is not available, so fall back to source/target compatibility.
 if(!JavaVersion.current().isJava8()){
-  compileJava.options.compilerArgs.addAll(['--release', '6'])
+  compileJava.options.compilerArgs.addAll(['--release', '8'])
+  compileTestJava.options.compilerArgs.addAll(['--release', '8'])
 }else{
-  sourceCompatibility = JavaVersion.VERSION_1_6 
-  targetCompatibility = JavaVersion.VERSION_1_6
+  sourceCompatibility = JavaVersion.VERSION_1_8
+  targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 
